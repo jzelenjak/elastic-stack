@@ -1,0 +1,38 @@
+# Define a directory to load monitor definitions from. Definitions take the form
+# of individual yaml files.
+# See https://www.elastic.co/docs/reference/beats/heartbeat/heartbeat-reference-yml
+heartbeat.config.monitors:
+  # Directory + glob pattern to search for configuration files
+  path: ${path.config}/monitors.d/*.yml
+  # If enabled, heartbeat will periodically check the config.monitors path for changes
+  reload.enabled: true
+  # How often to check for changes
+  reload.period: 15s
+
+
+#heartbeat.monitors:
+#- type: http
+#  schedule: '@every 5s'
+#  urls:
+#    - '${ELASTIC_HOSTS:https://es01:9200}'
+#    - '${KIBANA_HOSTS:https://kibana:5601}'
+
+#- type: icmp
+#  schedule: '@every 5s'
+#  hosts:
+#    - elasticsearch
+#    - kibana
+
+processors:
+  - add_cloud_metadata: ~
+  - add_docker_metadata: ~
+
+output.elasticsearch:
+  hosts: '${ELASTIC_HOSTS:https://es01:9200}'
+  protocol: "https"
+  username: '${ELASTIC_USER:elastic}'
+  password: '${ELASTIC_PASSWORD:elastic}'
+  ssl.certificate_authorities: ["${SSL_CERTIFICATEAUTHORITIES}"]
+  ssl.supported_protocols: [TLSv1.3, TLSv1.2]
+  #ssl.verification_mode: certificate
+  #ssl.enabled: true

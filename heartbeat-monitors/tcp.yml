@@ -1,0 +1,11 @@
+# Configuration file for TCP monitor.
+# For more information about TCP Heartbeat monitor, see the documentation:
+# - https://www.elastic.co/docs/reference/beats/heartbeat/monitor-tcp-options
+# - https://www.elastic.co/docs/reference/beats/heartbeat/monitor-options
+
+- id: elastic-tcp-monitor
+  type: tcp
+  schedule: '@every 15s'
+  hosts:
+    - es01:${ES_PORT:9200}
+    - kibana:${KIBANA_PORT:5601}

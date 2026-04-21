@@ -1,0 +1,62 @@
+# Filebeat configuration file based on:
+# - https://www.elastic.co/blog/getting-started-with-the-elastic-stack-and-docker-compose
+# - https://github.com/elastic/beats/blob/main/deploy/docker/filebeat.docker.yml
+# For additional information see the documentation:
+# - https://www.elastic.co/docs/reference/beats/filebeat/running-on-docker
+# - https://www.elastic.co/docs/reference/beats/filebeat/configuration-filebeat-modules
+# - https://www.elastic.co/docs/reference/beats/filebeat/configuration-autodiscover-hints
+# - https://www.elastic.co/docs/reference/beats/filebeat/filebeat-module-apache
+# - https://www.elastic.co/docs/reference/beats/filebeat/configuration-dashboards
+
+filebeat.inputs:
+  - type: filestream
+    id: default-filestream
+    paths:
+    - ${path.config}/ingest-data/*
+
+#filebeat.autodiscover:
+#  providers:
+#    - type: docker
+#      hints.enabled: true
+#      hints.default_config:
+#        type: filestream
+#        id: container-${data.container.id}
+#        close.on_state_change.removed: false
+#        prospector.scanner.symlinks: true
+#        parsers:
+#          - container: ~
+#        paths:
+#          - "/var/lib/docker/containers/${data.container.id}/*.log"
+
+filebeat.config:
+  modules:
+    path: ${path.config}/modules.d/*.yml
+    reload.enabled: false
+
+filebeat.modules:
+  - module: apache
+    access: 
+      enabled: true
+      var.paths: ["${path.config}/ingest-data/apache-logs/access*"]
+    error:
+      enabled: true
+      var.paths: ["${path.config}/ingest-data/apache-logs/error*"]
+
+processors:
+  - add_docker_metadata: ~
+
+setup.kibana:
+  host: ${KIBANA_HOSTS}
+  username: ${ELASTIC_USER}
+  password: ${ELASTIC_PASSWORD}
+  ssl.certificate_authorities: ${SSL_CERTIFICATEAUTHORITIES}
+
+setup.dashboards.enabled: true
+
+output.elasticsearch:
+  hosts: ${ELASTIC_HOSTS}
+  username: ${ELASTIC_USER}
+  password: ${ELASTIC_PASSWORD}
+  ssl.enabled: true
+  ssl.certificate_authorities: ${SSL_CERTIFICATEAUTHORITIES}
+

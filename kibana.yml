@@ -1,0 +1,24 @@
+# Kibana configuration file.
+# For more information, see the documentation:
+# - https://www.elastic.co/docs/deploy-manage/deploy/self-managed/configure-kibana
+# - https://www.elastic.co/docs/deploy-manage/security/set-up-basic-security-plus-https
+# - https://www.elastic.co/docs/reference/kibana/configuration-reference
+# - https://www.elastic.co/docs/reference/kibana/configuration-reference/general-settings
+# - https://www.elastic.co/docs/reference/kibana/configuration-reference/security-settings
+
+server.host: "0.0.0.0"
+server.shutdownTimeout: "5s"
+server.ssl.certificate: /usr/share/kibana/config/certs/kibana/kibana.crt
+server.ssl.key: /usr/share/kibana/config/certs/kibana/kibana.key
+server.ssl.enabled: true
+path.data: /usr/share/kibana/data
+
+elasticsearch.hosts: [ "https://es01:9200" ]
+elasticsearch.ssl.certificate: /usr/share/kibana/config/certs/kibana/kibana.crt
+elasticsearch.ssl.key: /usr/share/kibana/config/certs/kibana/kibana.key
+elasticsearch.ssl.certificateAuthorities: /usr/share/kibana/config/certs/ca/ca.crt
+elasticsearch.ssl.verificationMode: certificate
+
+xpack.encryptedSavedObjects.encryptionKey: ${KIBANA_ENCRYPTED_SAVED_OBJECTS_ENCRYPTION_KEY}
+xpack.reporting.encryptionKey: ${KIBANA_REPORTING_ENCRYPTION_KEY}
+xpack.security.encryptionKey: ${KIBANA_SECURITY_ENCRYPTION_KEY}

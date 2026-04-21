@@ -1,0 +1,15 @@
+# Public CA certificate for verification
+ca.crt
+*ca*.crt
+
+# Elasticsearch input (source) data
+data/
+
+# Environment values
+.env
+
+# Symbolic links
+curl.py
+curl.sh
+!*/curl.py
+!*/curl.sh
