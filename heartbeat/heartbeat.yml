@@ -1,0 +1,40 @@
+# Heartbeat configuration file.
+# For more information, see the documentation:
+# - https://www.elastic.co/docs/reference/beats/heartbeat/heartbeat-reference-yml
+# - https://github.com/elastic/beats/blob/main/deploy/docker/heartbeat.docker.yml
+
+# Directory with monitor definitions (individual yaml files)
+heartbeat.config.monitors:
+  # Directory + glob pattern to search for configuration files
+  path: ${path.config}/monitors.d/*.yml
+  # If enabled, heartbeat will periodically check the config.monitors path for changes
+  reload.enabled: true
+  # How often to check for changes
+  reload.period: 15s
+
+#heartbeat.monitors:
+#- type: http
+#  schedule: '@every 5s'
+#  urls:
+#    - https://es01:9200
+#    - https://kibana:5601
+
+#- type: icmp
+#  schedule: '@every 5s'
+#  hosts:
+#    - es01
+#    - kibana
+
+processors:
+  - add_cloud_metadata: ~
+  - add_docker_metadata: ~
+
+output.elasticsearch:
+  hosts: ${ES_HOSTS}
+  protocol: https
+  username: ${ELASTIC_USER}
+  password: ${ELASTIC_PASSWORD}
+  ssl.certificate_authorities: ${SSL_CERTIFICATE_AUTHORITIES}
+  ssl.supported_protocols: [TLSv1.3, TLSv1.2]
+  ssl.verification_mode: certificate
+  ssl.enabled: true

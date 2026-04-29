@@ -13,16 +13,16 @@ services:
     user: "0"
     command: /usr/share/elasticsearch/docker_elastic_setup.sh
     volumes:
-      - ./docker_elastic_setup.sh:/usr/share/elasticsearch/docker_elastic_setup.sh
-      - ./instances.yml:/usr/share/elasticsearch/config/certs/instances.yml
+      - ./setup/docker_elastic_setup.sh:/usr/share/elasticsearch/docker_elastic_setup.sh:ro
+      - ./setup/instances.yml:/usr/share/elasticsearch/config/certs/instances.yml
       - certs:/usr/share/elasticsearch/config/certs
       - ca_certs:/usr/share/elasticsearch/config/ca_certs
       - es01_certs:/usr/share/elasticsearch/config/certs/es01
       - kibana_certs:/usr/share/elasticsearch/config/certs/kibana
       - es01_snapshots:/usr/share/elasticsearch/snapshots/
     environment:
-      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
-      - KIBANA_PASSWORD=${KIBANA_PASSWORD}
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD}
+      KIBANA_PASSWORD: ${KIBANA_PASSWORD}
     networks:
       - internal
     healthcheck:
@@ -37,17 +37,21 @@ services:
     image: docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION}
     restart: unless-stopped
     volumes:
-      - ./elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml
+      - ./elasticsearch/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml:ro
       - ca_certs:/usr/share/elasticsearch/config/certs/ca
       - es01_certs:/usr/share/elasticsearch/config/certs/es01
       - es01_data:/usr/share/elasticsearch/data
       - es01_snapshots:/usr/share/elasticsearch/snapshots/
     environment:
-      - NODE_NAME=es01
-      - CLUSTER_NAME=${CLUSTER_NAME} 
-      - ELASTIC_USER=elastic
-      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
-      - LICENSE=${LICENSE}
+      NODE_NAME: es01
+      CLUSTER_NAME: ${ES_CLUSTER_NAME}
+      ELASTIC_USER: ${ELASTIC_USER}
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD}
+      LICENSE: ${LICENSE}
+      # INFO: When using rootless docker mode
+      MEMORY_LOCK: false
+      # INFO: When using non-rootless docker mode
+      # MEMORY_LOCK: true
     ports:
       - ${ES_PORT}:9200
     networks:
@@ -77,18 +81,18 @@ services:
     image: docker.elastic.co/kibana/kibana:${STACK_VERSION}
     restart: unless-stopped
     volumes:
-      - ./kibana.yml:/usr/share/kibana/config/kibana.yml
+      - ./kibana/kibana.yml:/usr/share/kibana/config/kibana.yml:ro
       - ca_certs:/usr/share/kibana/config/certs/ca
       - kibana_certs:/usr/share/kibana/config/certs/kibana
       - kibana_data:/usr/share/kibana/data
     environment:
-      - SERVERNAME=kibana
-      - ELASTICSEARCH_HOSTS=https://es01:9200
-      - ELASTICSEARCH_USERNAME=kibana_system
-      - ELASTICSEARCH_PASSWORD=${KIBANA_PASSWORD}
-      - KIBANA_ENCRYPTED_SAVED_OBJECTS_ENCRYPTION_KEY=${KIBANA_ENCRYPTED_SAVED_OBJECTS_ENCRYPTION_KEY}
-      - KIBANA_REPORTING_ENCRYPTION_KEY=${KIBANA_REPORTING_ENCRYPTION_KEY}
-      - KIBANA_SECURITY_ENCRYPTION_KEY=${KIBANA_SECURITY_ENCRYPTION_KEY}
+      ES_HOSTS: '["https://es01:9200"]'
+      SERVER_NAME: kibana
+      KIBANA_USER: ${KIBANA_USER}
+      KIBANA_PASSWORD: ${KIBANA_PASSWORD}
+      ENCRYPTED_SAVED_OBJECTS_ENCRYPTION_KEY: ${KIBANA_ENCRYPTED_SAVED_OBJECTS_ENCRYPTION_KEY}
+      REPORTING_ENCRYPTION_KEY: ${KIBANA_REPORTING_ENCRYPTION_KEY}
+      SECURITY_ENCRYPTION_KEY: ${KIBANA_SECURITY_ENCRYPTION_KEY}
     ports:
       - ${KIBANA_PORT}:5601
     networks:
@@ -115,16 +119,20 @@ services:
     # INFO: Test logstash pipeline configuration
     # command: /usr/share/logstash/bin/logstash -f /usr/share/logstash/pipeline/logstash-json.conf --config.test_and_exit
     volumes:
-      - ./logstash-pipelines:/usr/share/logstash/pipeline
-      - ./logstash-pipelines.yml:/usr/share/logstash/config/pipelines.yml
-      - ./logstash-ingest-data:/usr/share/logstash/ingest-data
+      - ./logstash/logstash.yml:/usr/share/logstash/config/logstash.yml:ro
+      - ./logstash/pipelines.yml:/usr/share/logstash/config/pipelines.yml:ro
+      - ./logstash/pipeline/:/usr/share/logstash/pipeline/
+      - ./logstash/ingest-data/:/usr/share/logstash/ingest-data/
       - ca_certs:/usr/share/logstash/config/certs/ca
       - logstash_data:/usr/share/logstash/data
     environment:
-      - ELASTIC_HOSTS=https://es01:9200
-      - ELASTIC_USER=elastic
-      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
-      - SSL_CERTIFICATEAUTHORITIES=/usr/share/logstash/config/certs/ca/ca.crt
+      # NOTE: One host
+      ES_HOSTS: "https://es01:9200"
+      # NOTE: Multiple hosts
+      # ELASTIC_HOSTS: "https://es01:9200 https://es02:9200 https://es03:9200"
+      ELASTIC_USER: ${ELASTIC_USER}
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD}
+      SSL_CERTIFICATE_AUTHORITIES: /usr/share/logstash/config/certs/ca/ca.crt
     networks:
       - internal
     mem_limit: ${LS_MEM_LIMIT}
@@ -145,8 +153,8 @@ services:
     container_name: filebeat
     image: docker.elastic.co/beats/filebeat:${STACK_VERSION}
     volumes:
-      - ./filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
-      - ./filebeat-ingest-data:/usr/share/filebeat/ingest-data:ro
+      - ./filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - ./filebeat/ingest-data/:/usr/share/filebeat/ingest-data
       - ca_certs:/usr/share/filebeat/certs
       - filebeat_data:/usr/share/filebeat/data
       # INFO: Rootless mode:
@@ -156,12 +164,11 @@ services:
       #- /var/lib/docker/containers:/var/lib/docker/containers:ro
       #- /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
-      - ELASTIC_USER=elastic
-      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
-      - ELASTIC_HOSTS=https://es01:9200
-      - KIBANA_HOSTS=https://kibana:5601
-      - LOGSTASH_HOSTS=http://logstash:9600
-      - SSL_CERTIFICATEAUTHORITIES=/usr/share/filebeat/certs/ca.crt
+      ES_HOSTS: '["https://es01:9200"]'
+      ELASTIC_USER: ${ELASTIC_USER}
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD}
+      KIBANA_HOST: "https://kibana:5601"
+      SSL_CERTIFICATE_AUTHORITIES: /usr/share/filebeat/certs/ca.crt
     networks:
       - internal
     depends_on:
@@ -176,17 +183,15 @@ services:
     container_name: heartbeat
     image: docker.elastic.co/beats/heartbeat:${STACK_VERSION}
     volumes:
-      - ./heartbeat.yml:/usr/share/heartbeat/heartbeat.yml:ro
-      - ./heartbeat-monitors:/usr/share/heartbeat/monitors.d
+      - ./heartbeat/heartbeat.yml:/usr/share/heartbeat/heartbeat.yml:ro
+      - ./heartbeat/monitors.d/:/usr/share/heartbeat/monitors.d/
       - ca_certs:/usr/share/heartbeat/certs
     environment:
-      - ELASTIC_USER=elastic
-      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
-      - ELASTIC_HOSTS=https://es01:9200
-      - ES_PORT=${ES_PORT}
-      - KIBANA_PORT=${KIBANA_PORT}
-      - KIBANA_HOSTS=https://kibana:5601
-      - SSL_CERTIFICATEAUTHORITIES=/usr/share/heartbeat/certs/ca.crt
+      ES_HOSTS: '["https://es01:9200"]'
+      ELASTIC_USER: ${ELASTIC_USER}
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD}
+      KIBANA_HOST: "https://kibana:5601"
+      SSL_CERTIFICATE_AUTHORITIES: /usr/share/heartbeat/certs/ca.crt
     networks:
       - internal
     depends_on:
@@ -198,7 +203,6 @@ services:
       co.elastic.logs/module: heartbeat
 
 volumes:
-  # Certificates
   certs:
   ca_certs:
   es01_certs:

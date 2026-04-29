@@ -1,5 +1,5 @@
-# Configuration file for HTTP monitor.
-# For more information about HTTP Heartbeat monitor, see the documentation:
+# Heartbeat HTTP monitor configuration file.
+# For more information, see the documentation:
 # - https://www.elastic.co/docs/reference/beats/heartbeat/monitor-http-options
 # - https://www.elastic.co/docs/reference/beats/heartbeat/monitor-options
 
@@ -7,13 +7,11 @@
   type: http
   schedule: '@every 15s'
   urls:
-    #- ${ELASTIC_HOSTS}/_cluster/health
     - "https://es01:9200/_cluster/health"
-  username: elastic
-  password: elastic
+  username: ${ELASTIC_USER}
+  password: ${ELASTIC_PASSWORD}
   ssl:
-    #certificate_authorities: ["${SSL_CERTIFICATEAUTHORITIES}"]
-    certificate_authorities: ["/usr/share/heartbeat/certs/ca.crt"]
+    certificate_authorities: ${SSL_CERTIFICATE_AUTHORITIES}
     supported_protocols: ["TLSv1.3", "TLSv1.2"]
   check.request:
     method: GET

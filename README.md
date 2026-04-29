@@ -5,7 +5,7 @@ This repository contains the Elastic Stack configuration (Elasticsearch, Logstas
 
 ## Setup
 
-The [docker-compose.yml](./docker-compose.yml) file contains the configuration for Elasticsearch, Kibana, Logstash, and Beats containers.
+The [compose.yaml](./compose.yaml) file contains the configuration for Elasticsearch, Kibana, Logstash, and Beats containers.
 
 The configuration is based on the [setup tutorial](https://www.elastic.co/blog/getting-started-with-the-elastic-stack-and-docker-compose) as well as the official documentation ([basic setup](https://www.elastic.co/docs/deploy-manage/deploy/self-managed/install-elasticsearch-docker-basic) and [docker compose setup](https://www.elastic.co/docs/deploy-manage/deploy/self-managed/install-elasticsearch-docker-compose)).
 Note that the Logstash configuration provided in the tutorial does not work due to permissions on the certificate files, because the `logstash` container does not (and cannot) run as root (see [this post](https://discuss.elastic.co/t/how-to-use-ssl-certificate-authorities-in-logstash/379517) or [this pull request to the tutorial repo](https://github.com/elkninja/elastic-stack-docker-part-one/pull/37) for the problem explanation). To avoid changing the file and directory permissions, we instead create a separate volume containing only the public CA certificate, which is then used by Logstash (and can be used by other containers) for certificate verification.

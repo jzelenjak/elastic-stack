@@ -1,0 +1,17 @@
+# Logstash configuration file.
+# For more information, see the documentation:
+# - https://www.elastic.co/docs/reference/logstash/logstash-settings-file
+# - https://github.com/elastic/logstash/blob/main/config/logstash.yml
+
+node.name: logstash
+
+path.data: ${HOME}/data
+path.settings: ${HOME}/config 	
+# Same as -f option
+# path.config: ${HOME}/logstash/pipeline
+
+# Dry run: test if the configuration is valid and exit
+# config.test_and_exit: false
+
+pipeline.ecs_compatibility: v8
+api.http.host: "0.0.0.0"

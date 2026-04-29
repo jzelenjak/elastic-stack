@@ -1,5 +1,5 @@
-# Configuration file for ICMP monitor.
-# For more information about ICMP Heartbeat monitor, see the documentation:
+# Heartbeat ICMP monitor configuration file.
+# For more information, see the documentation:
 # - https://www.elastic.co/docs/reference/beats/heartbeat/monitor-icmp-options
 # - https://www.elastic.co/docs/reference/beats/heartbeat/monitor-options
 

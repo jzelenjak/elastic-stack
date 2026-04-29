@@ -1,12 +1,11 @@
-# Filebeat configuration file based on:
-# - https://www.elastic.co/blog/getting-started-with-the-elastic-stack-and-docker-compose
-# - https://github.com/elastic/beats/blob/main/deploy/docker/filebeat.docker.yml
-# For additional information see the documentation:
+# Filebeat configuration file.
+# For more information, see the documentation:
 # - https://www.elastic.co/docs/reference/beats/filebeat/running-on-docker
 # - https://www.elastic.co/docs/reference/beats/filebeat/configuration-filebeat-modules
 # - https://www.elastic.co/docs/reference/beats/filebeat/configuration-autodiscover-hints
 # - https://www.elastic.co/docs/reference/beats/filebeat/filebeat-module-apache
 # - https://www.elastic.co/docs/reference/beats/filebeat/configuration-dashboards
+# - https://github.com/elastic/beats/blob/main/deploy/docker/filebeat.docker.yml
 
 filebeat.inputs:
   - type: filestream
@@ -46,17 +45,17 @@ processors:
   - add_docker_metadata: ~
 
 setup.kibana:
-  host: ${KIBANA_HOSTS}
+  host: ${KIBANA_HOST}
   username: ${ELASTIC_USER}
   password: ${ELASTIC_PASSWORD}
-  ssl.certificate_authorities: ${SSL_CERTIFICATEAUTHORITIES}
+  ssl.certificate_authorities: ${SSL_CERTIFICATE_AUTHORITIES}
 
 setup.dashboards.enabled: true
 
 output.elasticsearch:
-  hosts: ${ELASTIC_HOSTS}
+  hosts: ${ES_HOSTS}
   username: ${ELASTIC_USER}
   password: ${ELASTIC_PASSWORD}
   ssl.enabled: true
-  ssl.certificate_authorities: ${SSL_CERTIFICATEAUTHORITIES}
+  ssl.certificate_authorities: ${SSL_CERTIFICATE_AUTHORITIES}
 
