@@ -32,8 +32,8 @@ processors:
 output.elasticsearch:
   hosts: ${ES_HOSTS}
   protocol: https
-  username: ${ELASTIC_USER}
-  password: ${ELASTIC_PASSWORD}
+  username: ${BEATS_USER}
+  password: ${BEATS_PASSWORD}
   ssl.certificate_authorities: ${SSL_CERTIFICATE_AUTHORITIES}
   ssl.supported_protocols: [TLSv1.3, TLSv1.2]
   ssl.verification_mode: certificate

@@ -7,41 +7,58 @@
 # - https://github.com/elastic/elasticsearch/tree/main/docs/reference/setup/install/docker
 
 services:
-  setup:
-    container_name: setup
+  setup-certs:
     image: docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION}
+    restart: no
     user: "0"
-    command: /usr/share/elasticsearch/docker_elastic_setup.sh
+    command: /usr/share/elasticsearch/docker_setup_certs.sh
     volumes:
-      - ./setup/docker_elastic_setup.sh:/usr/share/elasticsearch/docker_elastic_setup.sh:ro
+      - ./setup/docker_setup_certs.sh:/usr/share/elasticsearch/docker_setup_certs.sh:ro
       - ./setup/instances.yml:/usr/share/elasticsearch/config/certs/instances.yml
       - certs:/usr/share/elasticsearch/config/certs
       - ca_certs:/usr/share/elasticsearch/config/ca_certs
       - es01_certs:/usr/share/elasticsearch/config/certs/es01
       - kibana_certs:/usr/share/elasticsearch/config/certs/kibana
+      # Needed to set the correct permissions for the snapshots directory for elasticsearch services
       - es01_snapshots:/usr/share/elasticsearch/snapshots/
-    environment:
-      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD}
-      KIBANA_PASSWORD: ${KIBANA_PASSWORD}
     networks:
       - internal
-    healthcheck:
-      test: ["CMD-SHELL", "[ -f config/certs/es01/es01.crt ] && [ -f config/ca_certs/ca.crt ]"]
-      start_period: 5s
-      interval: 1s
-      timeout: 5s
-      retries: 120
+
+  setup-users:
+    image: docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION}
+    restart: no
+    user: "0"
+    command: /usr/share/elasticsearch/docker_setup_users.sh
+    volumes:
+      - ./setup/docker_setup_users.sh:/usr/share/elasticsearch/docker_setup_users.sh:ro
+      - ca_certs:/usr/share/elasticsearch/config/certs/ca:ro
+    environment:
+      ES_HOST: "https://es01:9200"
+      ELASTIC_USER: ${ELASTIC_USER}
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD}
+      KIBANA_USER: ${KIBANA_USER}
+      KIBANA_PASSWORD: ${KIBANA_PASSWORD}
+      LOGSTASH_USER: ${LOGSTASH_USER}
+      LOGSTASH_PASSWORD: ${LOGSTASH_PASSWORD}
+      BEATS_USER: ${BEATS_USER}
+      BEATS_PASSWORD: ${BEATS_PASSWORD}
+    networks:
+      - internal
+    depends_on:
+      setup-certs:
+        condition: service_completed_successfully
+      es01:
+        condition: service_healthy
 
   es01:
-    container_name: es01
     image: docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION}
     restart: unless-stopped
     volumes:
       - ./elasticsearch/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml:ro
-      - ca_certs:/usr/share/elasticsearch/config/certs/ca
-      - es01_certs:/usr/share/elasticsearch/config/certs/es01
+      - ca_certs:/usr/share/elasticsearch/config/certs/ca:ro
+      - es01_certs:/usr/share/elasticsearch/config/certs/es01:ro
       - es01_data:/usr/share/elasticsearch/data
-      - es01_snapshots:/usr/share/elasticsearch/snapshots/
+      - es01_snapshots:/usr/share/elasticsearch/snapshots
     environment:
       NODE_NAME: es01
       CLUSTER_NAME: ${ES_CLUSTER_NAME}
@@ -71,19 +88,18 @@ services:
       timeout: 30s
       retries: 120
     depends_on:
-      setup:
-        condition: service_healthy
+      setup-certs:
+        condition: service_completed_successfully
     labels:
       co.elastic.logs/module: elasticsearch
 
   kibana:
-    container_name: kibana
     image: docker.elastic.co/kibana/kibana:${STACK_VERSION}
     restart: unless-stopped
     volumes:
       - ./kibana/kibana.yml:/usr/share/kibana/config/kibana.yml:ro
-      - ca_certs:/usr/share/kibana/config/certs/ca
-      - kibana_certs:/usr/share/kibana/config/certs/kibana
+      - ca_certs:/usr/share/kibana/config/certs/ca:ro
+      - kibana_certs:/usr/share/kibana/config/certs/kibana:ro
       - kibana_data:/usr/share/kibana/data
     environment:
       ES_HOSTS: '["https://es01:9200"]'
@@ -110,7 +126,6 @@ services:
       co.elastic.logs/module: kibana
 
   logstash:
-    container_name: logstash
     image: docker.elastic.co/logstash/logstash:${STACK_VERSION}
     # INFO: You can specify which pipeline to run with a -f option
     # In that case, Logstash will ignore the pipelines.yml file
@@ -121,17 +136,17 @@ services:
     volumes:
       - ./logstash/logstash.yml:/usr/share/logstash/config/logstash.yml:ro
       - ./logstash/pipelines.yml:/usr/share/logstash/config/pipelines.yml:ro
-      - ./logstash/pipeline/:/usr/share/logstash/pipeline/
-      - ./logstash/ingest-data/:/usr/share/logstash/ingest-data/
-      - ca_certs:/usr/share/logstash/config/certs/ca
+      - ./logstash/pipeline/:/usr/share/logstash/pipeline/:ro
+      - ./logstash/ingest-data/:/usr/share/logstash/ingest-data/:ro
+      - ca_certs:/usr/share/logstash/config/certs/ca:ro
       - logstash_data:/usr/share/logstash/data
     environment:
       # NOTE: One host
       ES_HOSTS: "https://es01:9200"
       # NOTE: Multiple hosts
-      # ELASTIC_HOSTS: "https://es01:9200 https://es02:9200 https://es03:9200"
-      ELASTIC_USER: ${ELASTIC_USER}
-      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD}
+      # ES_HOSTS: "https://es01:9200 https://es02:9200 https://es03:9200"
+      LOGSTASH_USER: ${LOGSTASH_USER}
+      LOGSTASH_PASSWORD: ${LOGSTASH_PASSWORD}
       SSL_CERTIFICATE_AUTHORITIES: /usr/share/logstash/config/certs/ca/ca.crt
     networks:
       - internal
@@ -144,18 +159,15 @@ services:
     depends_on:
       es01:
         condition: service_healthy
-      kibana:
-        condition: service_healthy
     labels:
       co.elastic.logs/module: logstash
 
   filebeat:
-    container_name: filebeat
     image: docker.elastic.co/beats/filebeat:${STACK_VERSION}
     volumes:
       - ./filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
-      - ./filebeat/ingest-data/:/usr/share/filebeat/ingest-data
-      - ca_certs:/usr/share/filebeat/certs
+      - ./filebeat/ingest-data/:/usr/share/filebeat/ingest-data:ro
+      - ca_certs:/usr/share/filebeat/certs:ro
       - filebeat_data:/usr/share/filebeat/data
       # INFO: Rootless mode:
       #- "$HOME/.local/share/docker/containers:/var/lib/docker/containers:ro"
@@ -165,8 +177,8 @@ services:
       #- /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
       ES_HOSTS: '["https://es01:9200"]'
-      ELASTIC_USER: ${ELASTIC_USER}
-      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD}
+      BEATS_USER: ${BEATS_USER}
+      BEATS_PASSWORD: ${BEATS_PASSWORD}
       KIBANA_HOST: "https://kibana:5601"
       SSL_CERTIFICATE_AUTHORITIES: /usr/share/filebeat/certs/ca.crt
     networks:
@@ -174,30 +186,25 @@ services:
     depends_on:
       es01:
         condition: service_healthy
-      kibana:
-        condition: service_healthy
     labels:
       co.elastic.logs/module: filebeat
 
   heartbeat:
-    container_name: heartbeat
     image: docker.elastic.co/beats/heartbeat:${STACK_VERSION}
     volumes:
       - ./heartbeat/heartbeat.yml:/usr/share/heartbeat/heartbeat.yml:ro
-      - ./heartbeat/monitors.d/:/usr/share/heartbeat/monitors.d/
-      - ca_certs:/usr/share/heartbeat/certs
+      - ./heartbeat/monitors.d/:/usr/share/heartbeat/monitors.d/:ro
+      - ca_certs:/usr/share/heartbeat/certs:ro
     environment:
       ES_HOSTS: '["https://es01:9200"]'
-      ELASTIC_USER: ${ELASTIC_USER}
-      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD}
+      BEATS_USER: ${BEATS_USER}
+      BEATS_PASSWORD: ${BEATS_PASSWORD}
       KIBANA_HOST: "https://kibana:5601"
       SSL_CERTIFICATE_AUTHORITIES: /usr/share/heartbeat/certs/ca.crt
     networks:
       - internal
     depends_on:
       es01:
-        condition: service_healthy
-      kibana:
         condition: service_healthy
     labels:
       co.elastic.logs/module: heartbeat
@@ -215,9 +222,3 @@ volumes:
 
 networks:
   internal:
-    driver: bridge
-    ipam:
-      config:
-        - subnet: ${ES_SUBNET}
-    driver_opts:
-      com.docker.network.bridge.name: "elastic_net"

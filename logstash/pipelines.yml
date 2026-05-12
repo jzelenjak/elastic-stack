@@ -10,13 +10,13 @@
 # INFO: Include/exclude and/or configure individual pipelines
 #- pipeline.id: apache-logs-pipeline
 #  path.config: "/usr/share/logstash/pipeline/logstash-apache.conf"
-#- pipeline.id: logs-pipeline
-#  path.config: "/usr/share/logstash/pipeline/logstash-logs.conf"
+#- pipeline.id: custom-logs-pipeline
+#  path.config: "/usr/share/logstash/pipeline/logstash-custom-logs.conf"
 #- pipeline.id: csv-data-pipeline
 #  path.config: "/usr/share/logstash/pipeline/logstash-csv.conf"
-#- pipeline.id: es-logs-pipeline
-#  path.config: "/usr/share/logstash/pipeline/logstash-es.conf"
 #  # NOTE: Must be set to 1 for autodetect_column_names to work
 #  pipeline.workers: 1
+#- pipeline.id: es-logs-pipeline
+#  path.config: "/usr/share/logstash/pipeline/logstash-es.conf"
 #- pipeline.id: json-data-pipeline
 #  path.config: "/usr/share/logstash/pipeline/logstash-json.conf"

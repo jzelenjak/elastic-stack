@@ -44,18 +44,17 @@ filebeat.modules:
 processors:
   - add_docker_metadata: ~
 
-setup.kibana:
-  host: ${KIBANA_HOST}
-  username: ${ELASTIC_USER}
-  password: ${ELASTIC_PASSWORD}
-  ssl.certificate_authorities: ${SSL_CERTIFICATE_AUTHORITIES}
+#setup.kibana:
+#  host: ${KIBANA_HOST}
+#  username: ${BEATS_USER}
+#  password: ${BEATS_PASSWORD}
+#  ssl.certificate_authorities: ${SSL_CERTIFICATE_AUTHORITIES}
 
-setup.dashboards.enabled: true
+setup.dashboards.enabled: false
 
 output.elasticsearch:
   hosts: ${ES_HOSTS}
-  username: ${ELASTIC_USER}
-  password: ${ELASTIC_PASSWORD}
+  username: ${BEATS_USER}
+  password: ${BEATS_PASSWORD}
   ssl.enabled: true
   ssl.certificate_authorities: ${SSL_CERTIFICATE_AUTHORITIES}
-
