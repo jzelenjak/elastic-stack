@@ -8,7 +8,6 @@
 network.host: 0.0.0.0
 node.name: ${NODE_NAME}
 cluster.name: ${CLUSTER_NAME}
-discovery.type: single-node
 bootstrap.memory_lock: ${MEMORY_LOCK:true}
 path.repo: ["${HOME}/snapshots/"]
 

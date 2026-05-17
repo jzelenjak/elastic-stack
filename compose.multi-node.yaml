@@ -1,0 +1,96 @@
+# Compose override file for multi-node Elasticsearch cluster.
+# This file must be used together with `compose.yaml` file when using a multi-node Elasticsearch mode.
+# When starting a multi-node cluster for the first time, use the `compose.multi-node.bootstrap.yaml` as well.
+
+x-es-common: &es-common
+  image: docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION}
+  restart: unless-stopped
+  networks:
+    - internal
+  mem_limit: ${ES_MEM_LIMIT}
+  # NOTE: Comment out if using Docker in rootless mode (container cannot have unlimited locked-in-memory address space)
+  ulimits:
+    memlock:
+      soft: -1
+      hard: -1
+  healthcheck:
+    test: ["CMD-SHELL", "curl -s --cacert config/certs/ca/ca.crt https://localhost:9200 | grep -q 'missing authentication credentials'"]
+    interval: 10s
+    timeout: 30s
+    retries: 120
+  depends_on:
+    setup-certs:
+      condition: service_completed_successfully
+  labels:
+    co.elastic.logs/module: elasticsearch
+
+x-es-common-env: &es-common-env
+  CLUSTER_NAME: ${ES_CLUSTER_NAME}
+  ELASTIC_USER: ${ELASTIC_USER}
+  ELASTIC_PASSWORD: ${ELASTIC_PASSWORD}
+  LICENSE: ${LICENSE}
+  # NOTE: Set to false if using Docker in rootless mode
+  MEMORY_LOCK: true
+  discovery.type: multi-node
+  discovery.seed_hosts: "es01,es02,es03"
+
+services:
+  # NOTE: All other settings are inherited from the main `compose.yaml` file
+  setup-certs:
+    volumes:
+      - ./setup/instances-multi.yml:/usr/share/elasticsearch/config/certs/instances.yml
+      - es02_certs:/usr/share/elasticsearch/config/certs/es02
+      - es03_certs:/usr/share/elasticsearch/config/certs/es03
+
+  # NOTE: All other settings are inherited from the main `compose.yaml` file
+  es01:
+    environment:
+      discovery.type: multi-node
+      discovery.seed_hosts: "es01,es02,es03"
+
+  es02:
+    <<: *es-common
+    volumes:
+      - ./elasticsearch/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml:ro
+      - ca_certs:/usr/share/elasticsearch/config/certs/ca:ro
+      - es02_certs:/usr/share/elasticsearch/config/certs/es02:ro
+      - es02_data:/usr/share/elasticsearch/data
+      - es_snapshots:/usr/share/elasticsearch/snapshots
+    environment: 
+      <<: *es-common-env
+      NODE_NAME: es02
+
+  es03:
+    <<: *es-common
+    volumes:
+      - ./elasticsearch/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml:ro
+      - ca_certs:/usr/share/elasticsearch/config/certs/ca:ro
+      - es03_certs:/usr/share/elasticsearch/config/certs/es03:ro
+      - es03_data:/usr/share/elasticsearch/data
+      - es_snapshots:/usr/share/elasticsearch/snapshots
+    environment:
+      <<: *es-common-env
+      NODE_NAME: es03
+
+  # NOTE: For the services below, all other settings are inherited from the main `compose.yaml` file
+  kibana:
+    environment:
+      ES_HOSTS: '["https://es01:9200","https://es02:9200","https://es03:9200"]'
+
+  logstash:
+    environment:
+      ES_HOSTS: "https://es01:9200 https://es02:9200 https://es03:9200"
+
+  filebeat:
+    environment:
+      ES_HOSTS: '["https://es01:9200","https://es02:9200","https://es03:9200"]'
+
+  heartbeat:
+    environment:
+      ES_HOSTS: '["https://es01:9200","https://es02:9200","https://es03:9200"]'
+
+volumes:
+  es02_certs:
+  es02_data:
+  es03_certs:
+  es03_data:

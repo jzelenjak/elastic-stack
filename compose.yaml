@@ -9,7 +9,7 @@
 services:
   setup-certs:
     image: docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION}
-    restart: no
+    restart: "no"
     user: "0"
     command: /usr/share/elasticsearch/docker_setup_certs.sh
     volumes:
@@ -20,13 +20,13 @@ services:
       - es01_certs:/usr/share/elasticsearch/config/certs/es01
       - kibana_certs:/usr/share/elasticsearch/config/certs/kibana
       # Needed to set the correct permissions for the snapshots directory for elasticsearch services
-      - es01_snapshots:/usr/share/elasticsearch/snapshots/
+      - es_snapshots:/usr/share/elasticsearch/snapshots/
     networks:
       - internal
 
   setup-users:
     image: docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION}
-    restart: no
+    restart: "no"
     user: "0"
     command: /usr/share/elasticsearch/docker_setup_users.sh
     volumes:
@@ -58,32 +58,28 @@ services:
       - ca_certs:/usr/share/elasticsearch/config/certs/ca:ro
       - es01_certs:/usr/share/elasticsearch/config/certs/es01:ro
       - es01_data:/usr/share/elasticsearch/data
-      - es01_snapshots:/usr/share/elasticsearch/snapshots
+      - es_snapshots:/usr/share/elasticsearch/snapshots
     environment:
       NODE_NAME: es01
       CLUSTER_NAME: ${ES_CLUSTER_NAME}
       ELASTIC_USER: ${ELASTIC_USER}
       ELASTIC_PASSWORD: ${ELASTIC_PASSWORD}
       LICENSE: ${LICENSE}
-      # INFO: When using rootless docker mode
-      MEMORY_LOCK: false
-      # INFO: When using non-rootless docker mode
-      # MEMORY_LOCK: true
+      # NOTE: Set to false if using Docker in rootless mode
+      MEMORY_LOCK: true
+      discovery.type: single-node
     ports:
       - ${ES_PORT}:9200
     networks:
       - internal
     mem_limit: ${ES_MEM_LIMIT}
-    # NOTE: With Docker in rootless mode, container cannot have unlimited locked-in-memory address space
-    # Therefore, memlock with -1:-1 is not possible (see https://github.com/elastic/start-local/issues/66)
-    # Check rootless mode with: docker info --format '{{ .SecurityOptions }}' 2>/dev/null
-    #ulimits:
-      #memlock:
-      #  soft: -1
-      #  hard: -1
+    # NOTE: Comment out if using Docker in rootless mode (container cannot have unlimited locked-in-memory address space)
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
     healthcheck:
-      test:
-        ["CMD-SHELL", "curl -s --cacert config/certs/ca/ca.crt https://localhost:9200 | grep -q 'missing authentication credentials'"]
+      test: ["CMD-SHELL", "curl -s --cacert config/certs/ca/ca.crt https://localhost:9200 | grep -q 'missing authentication credentials'"]
       interval: 10s
       timeout: 30s
       retries: 120
@@ -141,10 +137,7 @@ services:
       - ca_certs:/usr/share/logstash/config/certs/ca:ro
       - logstash_data:/usr/share/logstash/data
     environment:
-      # NOTE: One host
       ES_HOSTS: "https://es01:9200"
-      # NOTE: Multiple hosts
-      # ES_HOSTS: "https://es01:9200 https://es02:9200 https://es03:9200"
       LOGSTASH_USER: ${LOGSTASH_USER}
       LOGSTASH_PASSWORD: ${LOGSTASH_PASSWORD}
       SSL_CERTIFICATE_AUTHORITIES: /usr/share/logstash/config/certs/ca/ca.crt
@@ -169,12 +162,6 @@ services:
       - ./filebeat/ingest-data/:/usr/share/filebeat/ingest-data:ro
       - ca_certs:/usr/share/filebeat/certs:ro
       - filebeat_data:/usr/share/filebeat/data
-      # INFO: Rootless mode:
-      #- "$HOME/.local/share/docker/containers:/var/lib/docker/containers:ro"
-      #- "$XDG_RUNTIME_DIR/docker.sock:/var/run/docker.sock:ro"
-      # INFO: Non-rootless mode:
-      #- /var/lib/docker/containers:/var/lib/docker/containers:ro
-      #- /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
       ES_HOSTS: '["https://es01:9200"]'
       BEATS_USER: ${BEATS_USER}
@@ -214,7 +201,7 @@ volumes:
   ca_certs:
   es01_certs:
   es01_data:
-  es01_snapshots:
+  es_snapshots:
   kibana_certs:
   kibana_data:
   logstash_data:

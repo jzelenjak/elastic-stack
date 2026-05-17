@@ -1,0 +1,15 @@
+# Compose override file for bootstrapping a multi-node Elasticsearch cluster.
+# This file must only be used together with `compose.multi-node.yaml` and `compose.yaml` files when creating a new multi-node cluster.
+# Once the multi-node cluster is created, do not use this file anymore.
+# See https://www.elastic.co/docs/deploy-manage/deploy/self-managed/important-settings-configuration#initial_master_nodes
+
+services:
+  es01:
+    environment:
+      cluster.initial_master_nodes: "es01,es02,es03"
+  es02:
+    environment:
+      cluster.initial_master_nodes: "es01,es02,es03"
+  es03:
+    environment:
+      cluster.initial_master_nodes: "es01,es02,es03"

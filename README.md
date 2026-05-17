@@ -5,40 +5,66 @@ This repository contains the Elastic Stack configuration (Elasticsearch, Logstas
 
 ## Setup
 
-The [compose.yaml](./compose.yaml) file contains the configuration for Elasticsearch, Kibana, Logstash, and Beats containers.
+The [compose.yaml](./compose.yaml) file contains the configuration for Elasticsearch, Kibana, Logstash, and Beats services.
+The configuration was inspired from the [official reference setup](https://www.elastic.co/docs/deploy-manage/deploy/self-managed/install-elasticsearch-docker-compose)
+and a [setup tutorial](https://www.elastic.co/blog/getting-started-with-the-elastic-stack-and-docker-compose) and has been further adapted.
 
-The configuration is based on the [setup tutorial](https://www.elastic.co/blog/getting-started-with-the-elastic-stack-and-docker-compose) as well as the official documentation ([basic setup](https://www.elastic.co/docs/deploy-manage/deploy/self-managed/install-elasticsearch-docker-basic) and [docker compose setup](https://www.elastic.co/docs/deploy-manage/deploy/self-managed/install-elasticsearch-docker-compose)).
-Note that the Logstash configuration provided in the tutorial does not work due to permissions on the certificate files, because the `logstash` container does not (and cannot) run as root (see [this post](https://discuss.elastic.co/t/how-to-use-ssl-certificate-authorities-in-logstash/379517) or [this pull request to the tutorial repo](https://github.com/elkninja/elastic-stack-docker-part-one/pull/37) for the problem explanation). To avoid changing the file and directory permissions, we instead create a separate volume containing only the public CA certificate, which is then used by Logstash (and can be used by other containers) for certificate verification.
+By default, the setup creates a single-node Elasticsearch cluster.
+If this is your intention, then you only need the main `compose.yaml` file and you can forget about other Compose files.
+
+In order to create a multi-node Elasticsearch cluster, you also need to use other Compose override files:
+[compose.multi-node.yaml](./compose.multi-node.yaml) and [compose.multi-node.bootstrap.yaml](./compose.multi-node.bootstrap.yaml).
+The second file (`compose.multi-node.bootstrap.yaml`) must only be used when first starting a new multi-node Elasticsearch cluster.
+For subsequent restarts or normal operations, use only `compose.multi-node.yaml` without `compose.multi-node.bootstrap.yaml`.
 
 Pull the Docker images for Elasticsearch, Kibana, Logstash, and Beats:
 ```bash
 docker compose pull
 ```
+(All images are defined in the main `compose.yaml` file.)
+
+Make sure to set the environment variables (such as passwords and Kibana encryption keys) in the `.env` file. Use `.env.example` as a reference.
 
 
 ## Usage
 
-Use the `./generate_kibana_keys.sh` script to generate encryption keys for Kibana. Replace the default values in `.env` file with the generated values.
-
-Set the environment variables by running `source .env`.
-
-Use standard Docker Compose commands to deploy the stack, e.g.:
+For single-node setup, you can use standard Docker Compose commands to deploy the stack, e.g.:
 ```bash
 # Start only Elasticsearch and Kibana
 docker compose up es01 kibana
-# Start all nodes
+# Start all services
 docker compose up
 ```
 
-Once the Elasticsearch container (`es01`) is running, copy the public CA certificate for verification:
+For multi-node setup, you need to specify the override Compose files with the `-f` option:
 ```bash
-docker cp es01:/usr/share/elasticsearch/config/certs/ca/ca.crt .
+# When starting a new multi-node Elasticsearch cluster
+docker compose -f compose.yaml -f compose.multi-node.yaml -f compose.multi-node.bootstrap.yaml up
+# For further operations on a multi-node Elasticsearch cluster
+docker compose -f compose.yaml -f compose.multi-node.yaml up
 ```
 
-To query the Elasticsearch node, run:
+For convenience, you can also use a wrapper script [compose-cmd.sh](./compose-cmd.sh), specifying the mode:
+```bash
+./compose-cmd.sh up                      # Runs `docker compose -f compose.yaml up`
+./compose-cmd.sh single up -d            # Runs `docker compose -f compose.yaml up -d`
+./compose-cmd.sh multi config            # Runs `docker compose -f compose.yaml -f compose.multi-node.yaml config`
+./compose-cmd.sh multi-bootstrap config  # Runs `docker compose -f compose.yaml -f compose.multi-node.yaml -f compose.multi-node.bootstrap.yaml config`
+```
+Note: Use `multi-bootstrap` only when creating a new multi-node Elasticsearch cluster. Once the cluster has formed, use `multi` instead.
+You can also use [compose-cmd-strict.sh](./compose-cmd-strict.sh), which is a slightly stricter version of `compose-cmd.sh`
+that checks existing Elasticsearch data volumes before allowing Compose startup commands with `multi` or `multi-bootstrap`.
+
+Once the Elasticsearch service (e.g. `es01`) is running, copy the public CA certificate for verification:
+```bash
+docker compose cp es01:/usr/share/elasticsearch/config/certs/ca/ca.crt .
+```
+
+To query Elasticsearch, run:
 ```bash
 curl --cacert ca.crt -u elastic:$ELASTIC_PASSWORD -XGET 'https://localhost:9200?pretty'
 ```
+(Note that `es01` is the only node that exposes the HTTP API to the host.)
 
 To save some typing, you can use `curl.py` and `curl.sh` wrapper scripts in the [utils](./utils/) directory, which predefine some `curl` arguments, e.g.:
 ```bash
