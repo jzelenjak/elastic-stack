@@ -90,7 +90,7 @@ send_request_with_body "PUT" "_security/user/${KIBANA_USER}/_password" "$body"
 
 # Create logstash_writer role and Logstash internal user
 # Logstash basic authentication: https://www.elastic.co/docs/reference/logstash/secure-connection#ls-http-auth-basic
-create_role "logstash_writer" '["monitor"]' '["logs-*","logstash-*"]' '["read","create","create_index","index","write","auto_configure"]'
+create_role "logstash_writer" '["monitor","manage_index_templates"]' '["logs-*","logstash-*"]' '["read","create","create_index","index","write","auto_configure"]'
 create_user "$LOGSTASH_USER" "$LOGSTASH_PASSWORD" '["logstash_writer"]' "Internal Logstash User"
 
 # Create beats_writer role and Beats internal user

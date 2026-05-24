@@ -18,9 +18,6 @@ x-es-common: &es-common
     interval: 10s
     timeout: 30s
     retries: 120
-  depends_on:
-    setup-certs:
-      condition: service_completed_successfully
   labels:
     co.elastic.logs/module: elasticsearch
 
@@ -38,9 +35,7 @@ services:
   # NOTE: All other settings are inherited from the main `compose.yaml` file
   setup-certs:
     volumes:
-      - ./setup/instances-multi.yml:/usr/share/elasticsearch/config/certs/instances.yml
-      - es02_certs:/usr/share/elasticsearch/config/certs/es02
-      - es03_certs:/usr/share/elasticsearch/config/certs/es03
+      - ./certs/instances-multi.yml:/usr/share/elasticsearch/config/instances.yml:ro
 
   # NOTE: All other settings are inherited from the main `compose.yaml` file
   es01:
@@ -52,8 +47,8 @@ services:
     <<: *es-common
     volumes:
       - ./elasticsearch/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml:ro
-      - ca_certs:/usr/share/elasticsearch/config/certs/ca:ro
-      - es02_certs:/usr/share/elasticsearch/config/certs/es02:ro
+      - ./certs/entities/ca_pub/:/usr/share/elasticsearch/config/certs/ca:ro
+      - ./certs/entities/es02/:/usr/share/elasticsearch/config/certs/es02:ro
       - es02_data:/usr/share/elasticsearch/data
       - es_snapshots:/usr/share/elasticsearch/snapshots
     environment: 
@@ -64,8 +59,8 @@ services:
     <<: *es-common
     volumes:
       - ./elasticsearch/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml:ro
-      - ca_certs:/usr/share/elasticsearch/config/certs/ca:ro
-      - es03_certs:/usr/share/elasticsearch/config/certs/es03:ro
+      - ./certs/entities/ca_pub/:/usr/share/elasticsearch/config/certs/ca:ro
+      - ./certs/entities/es03/:/usr/share/elasticsearch/config/certs/es03:ro
       - es03_data:/usr/share/elasticsearch/data
       - es_snapshots:/usr/share/elasticsearch/snapshots
     environment:
@@ -90,7 +85,5 @@ services:
       ES_HOSTS: '["https://es01:9200","https://es02:9200","https://es03:9200"]'
 
 volumes:
-  es02_certs:
   es02_data:
-  es03_certs:
   es03_data:

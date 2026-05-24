@@ -1,4 +1,4 @@
-# Single-node Elasticsearch cluster with Kibana, Logstash, and Filebeat
+# Single-node Elasticsearch cluster with Kibana, Logstash, and Beats
 # Resources:
 # - https://www.elastic.co/blog/getting-started-with-the-elastic-stack-and-docker-compose
 # - https://www.elastic.co/docs/deploy-manage/deploy/self-managed/install-elasticsearch-docker-basic
@@ -11,27 +11,26 @@ services:
     image: docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION}
     restart: "no"
     user: "0"
-    command: /usr/share/elasticsearch/docker_setup_certs.sh
+    command: /usr/share/elasticsearch/setup_certs.sh
     volumes:
-      - ./setup/docker_setup_certs.sh:/usr/share/elasticsearch/docker_setup_certs.sh:ro
-      - ./setup/instances.yml:/usr/share/elasticsearch/config/certs/instances.yml
-      - certs:/usr/share/elasticsearch/config/certs
-      - ca_certs:/usr/share/elasticsearch/config/ca_certs
-      - es01_certs:/usr/share/elasticsearch/config/certs/es01
-      - kibana_certs:/usr/share/elasticsearch/config/certs/kibana
+      - ./certs/setup_certs.sh:/usr/share/elasticsearch/setup_certs.sh:ro
+      - ./certs/instances.yml:/usr/share/elasticsearch/config/instances.yml:ro
+      - ./certs/entities/:/usr/share/elasticsearch/config/certs
       # Needed to set the correct permissions for the snapshots directory for elasticsearch services
       - es_snapshots:/usr/share/elasticsearch/snapshots/
     networks:
       - internal
+    profiles:
+      - setup
 
   setup-users:
     image: docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION}
     restart: "no"
     user: "0"
-    command: /usr/share/elasticsearch/docker_setup_users.sh
+    command: /usr/share/elasticsearch/setup_users.sh
     volumes:
-      - ./setup/docker_setup_users.sh:/usr/share/elasticsearch/docker_setup_users.sh:ro
-      - ca_certs:/usr/share/elasticsearch/config/certs/ca:ro
+      - ./setup/setup_users.sh:/usr/share/elasticsearch/setup_users.sh:ro
+      - ./certs/entities/ca_pub/:/usr/share/elasticsearch/config/certs/ca:ro
     environment:
       ES_HOST: "https://es01:9200"
       ELASTIC_USER: ${ELASTIC_USER}
@@ -45,8 +44,6 @@ services:
     networks:
       - internal
     depends_on:
-      setup-certs:
-        condition: service_completed_successfully
       es01:
         condition: service_healthy
 
@@ -55,8 +52,8 @@ services:
     restart: unless-stopped
     volumes:
       - ./elasticsearch/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml:ro
-      - ca_certs:/usr/share/elasticsearch/config/certs/ca:ro
-      - es01_certs:/usr/share/elasticsearch/config/certs/es01:ro
+      - ./certs/entities/ca_pub/:/usr/share/elasticsearch/config/certs/ca:ro
+      - ./certs/entities/es01/:/usr/share/elasticsearch/config/certs/es01:ro
       - es01_data:/usr/share/elasticsearch/data
       - es_snapshots:/usr/share/elasticsearch/snapshots
     environment:
@@ -83,9 +80,6 @@ services:
       interval: 10s
       timeout: 30s
       retries: 120
-    depends_on:
-      setup-certs:
-        condition: service_completed_successfully
     labels:
       co.elastic.logs/module: elasticsearch
 
@@ -94,8 +88,8 @@ services:
     restart: unless-stopped
     volumes:
       - ./kibana/kibana.yml:/usr/share/kibana/config/kibana.yml:ro
-      - ca_certs:/usr/share/kibana/config/certs/ca:ro
-      - kibana_certs:/usr/share/kibana/config/certs/kibana:ro
+      - ./certs/entities/ca_pub/:/usr/share/kibana/config/certs/ca:ro
+      - ./certs/entities/kibana/:/usr/share/kibana/config/certs/kibana:ro
       - kibana_data:/usr/share/kibana/data
     environment:
       ES_HOSTS: '["https://es01:9200"]'
@@ -118,6 +112,8 @@ services:
     depends_on:
       es01:
         condition: service_healthy
+      setup-users:
+        condition: service_completed_successfully
     labels:
       co.elastic.logs/module: kibana
 
@@ -134,7 +130,7 @@ services:
       - ./logstash/pipelines.yml:/usr/share/logstash/config/pipelines.yml:ro
       - ./logstash/pipeline/:/usr/share/logstash/pipeline/:ro
       - ./logstash/ingest-data/:/usr/share/logstash/ingest-data/:ro
-      - ca_certs:/usr/share/logstash/config/certs/ca:ro
+      - ./certs/entities/ca_pub/:/usr/share/logstash/config/certs/ca:ro
       - logstash_data:/usr/share/logstash/data
     environment:
       ES_HOSTS: "https://es01:9200"
@@ -149,9 +145,14 @@ services:
       interval: 10s
       timeout: 10s
       retries: 120
+    profiles:
+      - logstash
+      - ingest
     depends_on:
       es01:
         condition: service_healthy
+      setup-users:
+        condition: service_completed_successfully
     labels:
       co.elastic.logs/module: logstash
 
@@ -160,19 +161,24 @@ services:
     volumes:
       - ./filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
       - ./filebeat/ingest-data/:/usr/share/filebeat/ingest-data:ro
-      - ca_certs:/usr/share/filebeat/certs:ro
+      - ./certs/entities/ca_pub/:/usr/share/filebeat/certs/ca:ro
       - filebeat_data:/usr/share/filebeat/data
     environment:
       ES_HOSTS: '["https://es01:9200"]'
       BEATS_USER: ${BEATS_USER}
       BEATS_PASSWORD: ${BEATS_PASSWORD}
       KIBANA_HOST: "https://kibana:5601"
-      SSL_CERTIFICATE_AUTHORITIES: /usr/share/filebeat/certs/ca.crt
+      SSL_CERTIFICATE_AUTHORITIES: /usr/share/filebeat/certs/ca/ca.crt
     networks:
       - internal
+    profiles:
+      - beats
+      - ingest
     depends_on:
       es01:
         condition: service_healthy
+      setup-users:
+        condition: service_completed_successfully
     labels:
       co.elastic.logs/module: filebeat
 
@@ -181,28 +187,29 @@ services:
     volumes:
       - ./heartbeat/heartbeat.yml:/usr/share/heartbeat/heartbeat.yml:ro
       - ./heartbeat/monitors.d/:/usr/share/heartbeat/monitors.d/:ro
-      - ca_certs:/usr/share/heartbeat/certs:ro
+      - ./certs/entities/ca_pub/:/usr/share/heartbeat/certs/ca:ro
     environment:
       ES_HOSTS: '["https://es01:9200"]'
       BEATS_USER: ${BEATS_USER}
       BEATS_PASSWORD: ${BEATS_PASSWORD}
       KIBANA_HOST: "https://kibana:5601"
-      SSL_CERTIFICATE_AUTHORITIES: /usr/share/heartbeat/certs/ca.crt
+      SSL_CERTIFICATE_AUTHORITIES: /usr/share/heartbeat/certs/ca/ca.crt
     networks:
       - internal
+    profiles:
+      - beats
+      - ingest
     depends_on:
       es01:
         condition: service_healthy
+      setup-users:
+        condition: service_completed_successfully
     labels:
       co.elastic.logs/module: heartbeat
 
 volumes:
-  certs:
-  ca_certs:
-  es01_certs:
   es01_data:
   es_snapshots:
-  kibana_certs:
   kibana_data:
   logstash_data:
   filebeat_data:

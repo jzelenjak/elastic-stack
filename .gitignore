@@ -1,12 +1,13 @@
-# Public CA certificate for verification
-ca.crt
-*ca*.crt
+# Certificate files
+**/*.key
+**/*.crt
+certs/entities/**/*.zip
 
-# Elasticsearch input (source) data
-data/
-
-# Environment values
+# Environment variables
 .env
+
+# Input data
+data/
 
 # Symbolic links
 curl.py

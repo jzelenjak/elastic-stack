@@ -3,6 +3,7 @@
 This repository contains the Elastic Stack configuration (Elasticsearch, Logstash, Kibana, Beats) as a starting point to learn the stack. 
 
 
+
 ## Setup
 
 The [compose.yaml](./compose.yaml) file contains the configuration for Elasticsearch, Kibana, Logstash, and Beats services.
@@ -26,15 +27,109 @@ docker compose pull
 Make sure to set the environment variables (such as passwords and Kibana encryption keys) in the `.env` file. Use `.env.example` as a reference.
 
 
+
+## Certificates
+
+There are two options to use TLS certificates with the current Elastic Stack setup: using `setup-certs` service or using external certificates.
+
+
+### setup-certs service
+
+The Compose file defines a `setup-certs` service which generates certificate authority (CA) and entity certificates using the `elasticsearch-certutil` tool
+(see [Elastic documentation](https://www.elastic.co/docs/reference/elasticsearch/command-line-tools/certutil) for more information about the tool).
+The actual certificate generation is performed by the [setup_certs.sh](./certs/setup_certs.sh) script in the [certs/](./certs/) directory.
+
+There are two modes to generate entity certificates with the `setup_certs.sh` script: "properties" (default) and "instances".
+
+The "properties" mode (default) uses a `.properties` file in each entity directory for which a certificate needs to be generated.
+The certificate files (certificate with `.crt` extension and private key with `.key` extension) are created in the same directory as the properties file.
+Multiple `.properties` files can be defined in the same directory to create certificates for different roles of the same entity (e.g., HTTP vs transport, client vs server etc.).
+
+The properties files must have the following format (consistent with the options for `elasticsearch-certutil`):
+```
+NAME=<service_name_or_dn>
+FILENAME=<cert_file_name_without_extension_and_slashes>
+DNS=<comma_separated_hostnames>
+IP=<comma_separated_ip_addresses>
+```
+The `NAME` property is required, while other properties are optional (but recommended).
+If `FILENAME` is not specified, then `NAME` is used as the certificate file name.
+This might be undesired if `NAME` is something other than service name (e.g., DN), so it is better to explicitly define the `FILENAME` property.
+Note that properties with empty values (e.g., `FILENAME=`) behave like having missing values, so there is no point in specifying empty properties.
+
+The [certs/entities](./certs/entities/) directory contains the properties files for the current Compose setup (e.g., see [es01](./certs/entities/es01/)).
+Feel free to change these files, add new properties files, or delete the existing properties files if you do not need them. 
+
+The advantage of "properties" mode is that it is flexible, gives more control over directory structure, and is better for idempotence, since it checks existing certificate files.
+The disadvantage is that a separate properties file is needed for each entity or entity role.
+
+The "instances" mode uses a single `instances.yml` file that defines all entities for which certificates need to be created.
+This file is then used by `elasticsearch-certutil` to generate all certificates for the specified entities. 
+
+The [certs/](./certs/) directory contains the instances files for single-node setup ([instances.yml](./certs/instances.yml)) and multi-node setup ([instances-multi.yml](./certs/instances-multi.yml)).
+For more information about the file format, see [elasticsearch-certutil documentation](https://www.elastic.co/docs/reference/elasticsearch/command-line-tools/certutil#certutil-silent).
+
+The advantage of "instances" mode is that it uses a single YAML file with all entities (entity roles) and invalid formats are handled by `elasticsearch-certutil`.
+The disadvantage is that there is less control over directory structure (e.g., certificates for different roles of the same entity will be in different directories).
+Furthermore, certificate files are always generated, since existing certificate files cannot be reliably detected based on the YAML file.
+Nevertheless, existing certificate files are not overwritten even if their name remains the same.
+
+Note that CA certificate generation does not depend on the chosen mode. The mode only affects entity (leaf) certificate creation.
+
+To change the certificate generation mode, set the environment variable `MODE` to "instances" (or "properties") in the `compose.yaml` file.
+
+The `setup_certs.sh` script also allows setting some certificate parameters, such as key size or lifetime, by defining the corresponding environment variables.
+
+To generate certificates using the `setup-certs` service, run:
+```bash
+# Single-node cluster or when using properties mode (regardless of single- vs multi-node setup)
+docker compose --profile setup run --rm setup-certs
+# Multi-node cluster (important when using instances.yml file)
+docker compose --profile setup -f compose.yaml -f compose.multi-node.yaml run --rm setup-certs
+# Explicitly start the service (specify the compose files with -f if needed)
+docker compose up setup-certs
+```
+If you need to regenerate certificates, simply delete the old certificate files in the corresponding `certs/entities/` directory and rerun the `setup-certs` service.
+
+
+### External certificates
+
+To use external certificates, you need to copy the corresponding certificate files (`.key` and `.crt`) to the [certs/entities/](./certs/entities/) directory.
+
+The certificate paths must match the paths specified in the Compose files, so that bind mounts are done correctly.
+For example, you can have `certs/entities/es01/es01.crt` and `certs/entities/es01/es01.key` for the `es01` service.
+
+For CA, you only need a `ca.crt` certificate file in the `certs/entities/ca_pub/` directory, which is then used by the services for verification.
+You do not need a `ca.key` file, since it is only used for local certificate generation using `setup-certs` service (as described above).
+Feel free to modify the paths in the Compose files to match your setup.
+
+If using external certificates, you can ignore all setup files in the `certs/` directory.
+You can also safely delete the `.properties` files if they bother you.
+
+
+
 ## Usage
+
+First, make sure you have all the required certificates in the `certs/entities/` directory (see the above section).
+
+If you want to perform certificate generation when starting other services, you could add `--profile setup` to the Compose command (e.g., `docker compose --profile setup up`).
+Note, however, that this is not recommended with the current setup, since Elasticsearch service does not depend on the `setup-certs` service to complete.
+Therefore, to ensure a proper [startup order](https://docs.docker.com/compose/how-tos/startup-order/), you would need to add a `depends_on` section for Elasticsearch service(s),
+specifying `setup-certs` with `condition: service_completed_successfully`.
+
+
+### Single-node cluster
 
 For single-node setup, you can use standard Docker Compose commands to deploy the stack, e.g.:
 ```bash
-# Start only Elasticsearch and Kibana
-docker compose up es01 kibana
-# Start all services
+# Start the core services
 docker compose up
+# Start Elasticsearch and Kibana
+docker compose up es01 kibana
 ```
+
+
+### Multi-node cluster
 
 For multi-node setup, you need to specify the override Compose files with the `-f` option:
 ```bash
@@ -55,16 +150,47 @@ Note: Use `multi-bootstrap` only when creating a new multi-node Elasticsearch cl
 You can also use [compose-cmd-strict.sh](./compose-cmd-strict.sh), which is a slightly stricter version of `compose-cmd.sh`
 that checks existing Elasticsearch data volumes before allowing Compose startup commands with `multi` or `multi-bootstrap`.
 
-Once the Elasticsearch service (e.g. `es01`) is running, copy the public CA certificate for verification:
+
+### Logstash and Beats
+
+Logstash and Beats are not the core services. Therefore, they have explicitly defined [profiles](https://docs.docker.com/compose/how-tos/profiles/).
+You can either start them later, once the core services (Elasticsearch and Kibana) are running, e.g.:
 ```bash
-docker compose cp es01:/usr/share/elasticsearch/config/certs/ca/ca.crt .
+docker compose up logstash
+docker compose up filebeat heartbeat
 ```
+or you can specify the profile(s) when starting the stack, e.g.:
+```bash
+# Start Elasticsearch, Kibana, and Logstash
+docker compose --profile logstash up
+# Start Elasticsearch, Kibana, and Beats
+docker compose --profile beats up
+# Start Elasticsearch, Kibana, Logstash, and Beats
+docker compose --profile ingest up
+# Start all services
+docker compose --profile "*" up
+```
+Note: to stop and/or remove the non-core services, you also need to specify the profile, e.g.:
+```bash
+# Stop Elasticsearch, Kibana, and Logstash
+docker compose --profile logstash stop
+# Remove all services
+docker compose --profile "*" down
+```
+
+
+### Further usage
+
+To access Kibana, type `https://localhost:5601` in your browser.
+Note that including the scheme `https://` is necessary, since Kibana is configured to use HTTPS.
 
 To query Elasticsearch, run:
 ```bash
-curl --cacert ca.crt -u elastic:$ELASTIC_PASSWORD -XGET 'https://localhost:9200?pretty'
+curl --cacert certs/entities/ca_pub/ca.crt -u "elastic:$ELASTIC_PASSWORD" -XGET 'https://localhost:9200?pretty'
 ```
-(Note that `es01` is the only node that exposes the HTTP API to the host.)
+(You can create a symlink for `ca.crt` in the repository root directory to make the command slighly shorter, e.g., `ln -s certs/entities/ca_pub/ca.crt ca.crt`)
+
+Note that `es01` is the only node that exposes the HTTP API to the host.
 
 To save some typing, you can use `curl.py` and `curl.sh` wrapper scripts in the [utils](./utils/) directory, which predefine some `curl` arguments, e.g.:
 ```bash
@@ -72,14 +198,17 @@ To save some typing, you can use `curl.py` and `curl.sh` wrapper scripts in the 
 ./utils/curl.py GET '/{index}/_search?pretty' '{"query": {"match": {"field": "value"}}}'
 ./utils/curl.sh -XPOST 'https://localhost:9200/_bulk?pretty' --data-binary @documents.ndjson
 ```
-(You can also create a symlink in the repository root directory for easier invocation, e.g. `ln -s utils/curl.py curl.py`.)
+(You can also create a symlink in the repository root directory for easier invocation, e.g. `ln -s utils/curl.py curl.py`)
 
 To parse or highlight the output, you can use `jq` command-line JSON processor (e.g. `... | jq` or `... | jq -r '.hits.hits.[]._id'`).
 
-If you want to remove the certificate warning when accessing Kibana via the browser, add the previously obtained CA certificate (`ca.crt`) to the trust store.
+
+### Remove certificate warnings
+
+If you want to remove certificate warnings when accessing Kibana via the browser, add the previously generated CA certificate (`./certs/entities/ca_pub/ca.crt`) to the trust store.
 For example, in Firefox, you can go to **Settings > Privacy & Security** (or `about:preferences#privacy`), find the section **Certificates**, choose **Manage certificates > Authorities**, and import the certificate.
 Alternatively, you can use the `certutil` tool, e.g.:
 ```bash
-certutil -d ~/.mozilla/firefox/{your_profile}/ -A -i ca.crt -n "Elastic Certificate Tool Autogenerated CA" -t C,,
+certutil -d ~/.mozilla/firefox/{your_profile}/ -A -i certs/entities/ca_pub/ca.crt -n "Elastic Certificate Tool Autogenerated CA" -t C,,
 ```
-(See [this wiki page](https://wiki.archlinux.org/title/User:Grawity/Adding_a_trusted_CA_certificate) for more information.)
+See [this wiki page](https://wiki.archlinux.org/title/User:Grawity/Adding_a_trusted_CA_certificate) for more information.
